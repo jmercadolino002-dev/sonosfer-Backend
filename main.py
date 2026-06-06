@@ -34,10 +34,6 @@ def get_db():
 def root():
     return {"status": "ok", "app": "Sonosfer API"}
 
-# ==========================================
-# SECCIÓN: CANCIONES (SONGS)
-# ==========================================
-
 @app.get("/songs")
 def get_songs(limit: int = 50, offset: int = 0, db=Depends(get_db)):
     cur = db.cursor()
@@ -81,7 +77,8 @@ def get_recommendations(song_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Canción no encontrada")
     cur.execute("""
         SELECT s.id, s.title, s.duration, s.cluster_id, s.cloudflare_url,
-               ar.name AS artist, al.title AS album
+               ar.name AS artist, ar.id AS artist_id,
+               al.title AS album, al.id AS album_id
         FROM songs s
         JOIN albums al ON s.album_id = al.id
         JOIN artists ar ON s.artist_id = ar.id
@@ -90,10 +87,6 @@ def get_recommendations(song_id: int, db=Depends(get_db)):
         LIMIT 10
     """, (song["cluster_id"], song_id))
     return cur.fetchall()
-
-# ==========================================
-# SECCIÓN: ARTISTAS (ARTISTS)
-# ==========================================
 
 @app.get("/artists")
 def get_artists(db=Depends(get_db)):
@@ -119,31 +112,27 @@ def get_artist_image(artist_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Artista no encontrado")
     try:
         response = requests.get(
-            f"https://deezer.com{artist['name']}&limit=1"
+            f"https://api.deezer.com/search/artist?q={requests.utils.quote(artist['name'])}&limit=1"
         )
         data = response.json()
         image_url = data['data'][0]['picture_medium']
         return {"artist_id": artist_id, "image_url": image_url}
     except Exception:
         return {"artist_id": artist_id, "image_url": None}
-        
+
 @app.get("/artists/{artist_id}/songs")
 def get_artist_songs(artist_id: int, db=Depends(get_db)):
     cur = db.cursor()
     cur.execute("""
         SELECT s.id, s.title, s.duration, s.track_number,
                s.cluster_id, s.cloudflare_url,
-               al.title AS album, al.year
+               al.title AS album, al.id AS album_id, al.year
         FROM songs s
         JOIN albums al ON s.album_id = al.id
         WHERE s.artist_id = %s
         ORDER BY al.year, s.track_number
     """, (artist_id,))
     return cur.fetchall()
-
-# ==========================================
-# SECCIÓN: ÁLBUMES (ALBUMS)
-# ==========================================
 
 @app.get("/albums")
 def get_albums(db=Depends(get_db)):
@@ -168,7 +157,7 @@ def get_album(album_id: int, db=Depends(get_db)):
     album = cur.fetchone()
     if not album:
         raise HTTPException(status_code=404, detail="Álbum no encontrado")
-    return album 
+    return album
 
 @app.get("/albums/{album_id}/songs")
 def get_album_songs(album_id: int, db=Depends(get_db)):
@@ -195,17 +184,13 @@ def get_album_cover(album_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Álbum no encontrado")
     try:
         response = requests.get(
-            f"https://deezer.com{album['name']} {album['title']}&limit=1"
+            f"https://api.deezer.com/search/album?q={requests.utils.quote(album['name'] + ' ' + album['title'])}&limit=1"
         )
         data = response.json()
-        cover_url = data['data'][0]['album']['cover_medium']
+        cover_url = data['data'][0]['cover_medium']
         return {"album_id": album_id, "cover_url": cover_url}
     except Exception:
         return {"album_id": album_id, "cover_url": None}
-
-# ==========================================
-# SECCIÓN: GÉNEROS Y BÚSQUEDA (GENRES & SEARCH)
-# ==========================================
 
 @app.get("/genres")
 def get_genres(db=Depends(get_db)):
