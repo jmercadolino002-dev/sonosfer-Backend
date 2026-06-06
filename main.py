@@ -102,14 +102,14 @@ def get_artist_image(artist_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Artista no encontrado")
     try:
         response = requests.get(
-            f"https://api.deezer.com/search?q={artist['name']}&limit=1"
+            f"https://api.deezer.com/search/artist?q={artist['name']}&limit=1"
         )
         data = response.json()
-        image_url = data['data'][0]['artist']['picture_medium']
+        image_url = data['data'][0]['picture_medium']
         return {"artist_id": artist_id, "image_url": image_url}
     except Exception:
         return {"artist_id": artist_id, "image_url": None}
-
+        
 @app.get("/artists/{artist_id}/songs")
 def get_artist_songs(artist_id: int, db=Depends(get_db)):
     cur = db.cursor()
