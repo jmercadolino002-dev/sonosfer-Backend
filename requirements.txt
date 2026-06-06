@@ -4,6 +4,5 @@ psycopg2-binary==2.9.9
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.9
-pylast==5.3.0
 requests==2.32.3
 bcrypt==4.0.1
