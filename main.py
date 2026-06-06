@@ -34,6 +34,10 @@ def get_db():
 def root():
     return {"status": "ok", "app": "Sonosfer API"}
 
+# ==========================================
+# SECCIÓN: CANCIONES (SONGS)
+# ==========================================
+
 @app.get("/songs")
 def get_songs(limit: int = 50, offset: int = 0, db=Depends(get_db)):
     cur = db.cursor()
@@ -87,11 +91,24 @@ def get_recommendations(song_id: int, db=Depends(get_db)):
     """, (song["cluster_id"], song_id))
     return cur.fetchall()
 
+# ==========================================
+# SECCIÓN: ARTISTAS (ARTISTS)
+# ==========================================
+
 @app.get("/artists")
 def get_artists(db=Depends(get_db)):
     cur = db.cursor()
     cur.execute("SELECT id, name FROM artists ORDER BY name")
     return cur.fetchall()
+
+@app.get("/artists/{artist_id}")
+def get_artist(artist_id: int, db=Depends(get_db)):
+    cur = db.cursor()
+    cur.execute("SELECT id, name FROM artists WHERE id = %s", (artist_id,))
+    artist = cur.fetchone()
+    if not artist:
+        raise HTTPException(status_code=404, detail="Artista no encontrado")
+    return artist
 
 @app.get("/artists/{artist_id}/image")
 def get_artist_image(artist_id: int, db=Depends(get_db)):
@@ -102,7 +119,7 @@ def get_artist_image(artist_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Artista no encontrado")
     try:
         response = requests.get(
-            f"https://api.deezer.com/search/artist?q={artist['name']}&limit=1"
+            f"https://deezer.com{artist['name']}&limit=1"
         )
         data = response.json()
         image_url = data['data'][0]['picture_medium']
@@ -124,6 +141,10 @@ def get_artist_songs(artist_id: int, db=Depends(get_db)):
     """, (artist_id,))
     return cur.fetchall()
 
+# ==========================================
+# SECCIÓN: ÁLBUMES (ALBUMS)
+# ==========================================
+
 @app.get("/albums")
 def get_albums(db=Depends(get_db)):
     cur = db.cursor()
@@ -135,6 +156,19 @@ def get_albums(db=Depends(get_db)):
         ORDER BY ar.name, al.year
     """)
     return cur.fetchall()
+
+@app.get("/albums/{album_id}")
+def get_album(album_id: int, db=Depends(get_db)):
+    cur = db.cursor()
+    cur.execute("""
+        SELECT al.id, al.title, al.year, ar.name AS artist
+        FROM albums al JOIN artists ar ON al.artist_id = ar.id
+        WHERE al.id = %s
+    """, (album_id,))
+    album = cur.fetchone()
+    if not album:
+        raise HTTPException(status_code=404, detail="Álbum no encontrado")
+    return album 
 
 @app.get("/albums/{album_id}/songs")
 def get_album_songs(album_id: int, db=Depends(get_db)):
@@ -161,13 +195,17 @@ def get_album_cover(album_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Álbum no encontrado")
     try:
         response = requests.get(
-            f"https://api.deezer.com/search?q={album['name']} {album['title']}&limit=1"
+            f"https://deezer.com{album['name']} {album['title']}&limit=1"
         )
         data = response.json()
         cover_url = data['data'][0]['album']['cover_medium']
         return {"album_id": album_id, "cover_url": cover_url}
     except Exception:
         return {"album_id": album_id, "cover_url": None}
+
+# ==========================================
+# SECCIÓN: GÉNEROS Y BÚSQUEDA (GENRES & SEARCH)
+# ==========================================
 
 @app.get("/genres")
 def get_genres(db=Depends(get_db)):
