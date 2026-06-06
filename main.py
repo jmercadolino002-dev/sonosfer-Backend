@@ -1,21 +1,16 @@
 import os
 import psycopg2
 import psycopg2.extras
-import pylast
+import requests
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
-LASTFM_SECRET = os.environ.get("LASTFM_SECRET")
 
 print(f"[STARTUP] DATABASE_URL set: {bool(DATABASE_URL)}")
-print(f"[STARTUP] LASTFM_API_KEY set: {bool(LASTFM_API_KEY)}")
 
 app = FastAPI(title="Sonosfer API")
 
-# Middleware CORS indispensable para que tu Frontend en GitHub Pages pueda leer esta API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,12 +29,6 @@ def get_db():
         yield conn
     finally:
         conn.close()
-
-def get_lastfm():
-    return pylast.LastFMNetwork(
-        api_key=LASTFM_API_KEY,
-        api_secret=LASTFM_SECRET
-    )
 
 @app.get("/")
 def root():
@@ -112,9 +101,11 @@ def get_artist_image(artist_id: int, db=Depends(get_db)):
     if not artist:
         raise HTTPException(status_code=404, detail="Artista no encontrado")
     try:
-        network = get_lastfm()
-        lastfm_artist = network.get_artist(artist["name"])
-        image_url = lastfm_artist.get_cover_image()
+        response = requests.get(
+            f"https://api.deezer.com/search?q={artist['name']}&limit=1"
+        )
+        data = response.json()
+        image_url = data['data'][0]['artist']['picture_medium']
         return {"artist_id": artist_id, "image_url": image_url}
     except Exception:
         return {"artist_id": artist_id, "image_url": None}
@@ -161,17 +152,19 @@ def get_album_songs(album_id: int, db=Depends(get_db)):
 def get_album_cover(album_id: int, db=Depends(get_db)):
     cur = db.cursor()
     cur.execute("""
-        SELECT al.title, ar.name
-        FROM albums al JOIN artists ar ON al.artist_id = ar.id
+        SELECT al.title, ar.name FROM albums al
+        JOIN artists ar ON al.artist_id = ar.id
         WHERE al.id = %s
     """, (album_id,))
     album = cur.fetchone()
     if not album:
         raise HTTPException(status_code=404, detail="Álbum no encontrado")
     try:
-        network = get_lastfm()
-        lastfm_album = network.get_album(album["name"], album["title"])
-        cover_url = lastfm_album.get_cover_image()
+        response = requests.get(
+            f"https://api.deezer.com/search?q={album['name']} {album['title']}&limit=1"
+        )
+        data = response.json()
+        cover_url = data['data'][0]['album']['cover_medium']
         return {"album_id": album_id, "cover_url": cover_url}
     except Exception:
         return {"album_id": album_id, "cover_url": None}
